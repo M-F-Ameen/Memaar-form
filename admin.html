@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>لوحة تحكم الإدارة — معمار دجلة</title>
+    <meta
+      name="description"
+      content="لوحة تحكم الإدارة لمراجعة تقييمات رضا العملاء في معمار دجلة."
+    />
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2c5f2d" />
+    <!-- Apple PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="معمار دجلة" />
+    <link rel="apple-touch-icon" href="/images/Logo.PNG" />
+    <!-- Fonts -->
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Roboto:wght@400;500&display=swap"
+      as="style"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Roboto:wght@400;500&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .icon {
+        width: 16px;
+        height: 16px;
+        margin-left: 6px;
+        fill: #ffffff;
+      }
+
+      .notification-icon,
+      .settings-icon,
+      .profile-icon {
+        transition: all 0.3s ease !important;
+      }
+
+      .notification-icon:hover,
+      .settings-icon:hover,
+      .profile-icon:hover {
+        transform: translateY(-50%) scale(1.2) !important;
+      }
+
+      .notification-icon:active,
+      .settings-icon:active,
+      .profile-icon:active {
+        transform: translateY(-50%) scale(1.3) !important;
+        transition: all 0.1s ease !important;
+      }
+
+      @media (min-width: 768px) {
+        .notification-icon {
+          right: 180px !important;
+        }
+        .settings-icon {
+          right: 100px !important;
+        }
+      }
+    </style>
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+                          .filter-container {
+                            display: flex;
+                          }
+
+                          .settings-menu {
+                            position: absolute;
+                            top: 56px;
+                            right: 80px;
+                            background: #ffffff;
+                            border: 1px solid #e5e7eb;
+                            border-radius: 12px;
+                            box-shadow: 4px 4px 62px 11px #000000db;
+                            z-index: 1000;
+                            display: none;
+                            min-width: 220px;
+                            padding: 8px;
+                            backdrop-filter: blur(10px);
+                            -webkit-backdrop-filter: blur(10px);
+                            border-top-right-radius: 0px !important;
+                          }
+
+                          .menu-item {
+                            padding: 12px 16px;
+                            cursor: pointer;
+                            border: none;
+                            background: none;
+                            text-align: right;
+                            width: 100%;
+                            font-family: "Cairo", sans-serif;
+                            font-size: 14px;
+                            color: #374151;
+                            border-radius: 8px;
+                            transition: all 0.2s ease;
+                            font-weight: 500;
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            background-color: lightblue;
+                          }
+
+                          .menu-item:hover {
+                            background-color: #f9fafb;
+                            color: #1f2937;
+                            transform: translateX(-2px);
+                          }
+
+                          .user-role {
+                            color: #6b7280;
+                            font-weight: 600;
+                            pointer-events: none;
+                            background: #f3f4f6;
+                            border-radius: 6px;
+                            margin-bottom: 4px;
+                          }
+
+                          .user-role span {
+                            color: #1f2937;
+                            font-weight: 700;
+                          }
+
+                          .profile-menu {
+                            position: absolute;
+                            top: 59px;
+                            right: 20px;
+                            background: #ffffff;
+                            border: 1px solid #e5e7eb;
+                            border-radius: 12px;
+                            box-shadow: 4px 4px 62px 11px #000000db;
+                            z-index: 1000;
+                            display: none;
+                            min-width: 180px;
+                            padding: 8px;
+                            backdrop-filter: blur(10px);
+                            -webkit-backdrop-filter: blur(10px);
+                            border-top-right-radius: 0px !important;
+                          }
+
+                          .profile-menu .menu-item {
+                            padding: 12px 16px;
+                            cursor: pointer;
+                            border: none;
+                            background: none;
+                            text-align: right;
+                            width: 100%;
+                            font-family: "Cairo", sans-serif;
+                            font-size: 14px;
+                            color: #374151;
+                            border-radius: 8px;
+                            transition: all 0.2s ease;
+                            font-weight: 600;
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            flex-direction: row-reverse;
+                          }
+
+                          .profile-menu .menu-item:hover {
+                            background-color: #f9fafb;
+                            color: #1f2937;
+                            transform: translateX(-2px);
+                          }
+
+                          .profile-menu .menu-item:first-child {
+                            color: #1f2937;
+                            font-weight: 600;
+                          }
+
+                          .profile-menu .menu-item:last-child {
+                            color: #1f2937;
+                            font-weight: 600;
+                          }
+
+                          .profile-menu .menu-item:first-child:hover {
+                            background-color: #f9fafb;
+                          }
+
+                          .profile-menu .menu-item:last-child:hover {
+                            background-color: #f9fafb;
+                          }
+
+                          .notification-menu {
+                              position: absolute;
+            top: 56px;
+            right: 167px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+                  border-radius: 7px;
+            box-shadow: 4px 4px 62px 11px #000000db;
+            z-index: 1000;
+            display: none;
+            min-width: 280px;
+            max-width: 320px;
+            padding: 8px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top-right-radius: 0px !important;
+            max-height: 400px;
+            overflow-y: auto;
+                          }
+                          .notification-menu::-webkit-scrollbar {
+          width: 6px;
+              border-bottom: 14px solid #535f4dad !important;
+      }
+
+      .notification-menu::-webkit-scrollbar-track {
+          background: transparent;
+          border-radius: 10px;
+      }
+
+      .notification-menu::-webkit-scrollbar-thumb {
+          background: #a1a1aa;
+          border-radius: 10px;
+      }
+
+      .notification-menu::-webkit-scrollbar-thumb:hover {
+          background: #8b8b94;
+      }
+
+      /* Firefox */
+      .notification-menu {
+          scrollbar-width: thin;
+          scrollbar-color: #a1a1aa transparent;
+      }
+
+                          .notification-item {
+                               padding: 6px 12px;
+                  border: none;
+                  /* background: none; */
+                  text-align: right;
+                  width: 100%;
+                  font-family: "Cairo", sans-serif;
+                  font-size: 13px;
+                  color: #374151;
+                  border-radius: 8px;
+                  transition: all 0.2s
+              ease;
+                  display: flex;
+                  align-items: center;
+                  flex-direction: row-reverse;
+                  justify-content: flex-start;
+                  background-color: #f8fafc;
+                  margin-bottom: 4px;
+                  border-right: 3px solid #ffd700;
+                  background: #80808040;
+                          }
+
+                          .notification-item:hover {
+                            background-color: #f1f5f9;
+                            color: #1f2937;
+                            transform: translateX(-2px);
+                          }
+
+                          .notification-content {
+                            flex: 1;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 2px;
+                          }
+
+                          .notification-text {
+                            font-weight: 500;
+                            font-size: 14px;
+                          }
+
+                          .notification-date {
+                            font-size: 12px;
+                            color: #6b7280;
+                            font-weight: 400;
+                          }
+
+                          .notification-delete {
+                            cursor: pointer;
+                        color: #ef4444;
+                        padding: 4px;
+                        border-radius: 4px;
+                        transition: all 0.2s
+                    ease;
+                        /* margin-right: 8px; */
+                        margin-left: 13px;
+                        box-shadow: 0px 0px 4px 5px #00000036;
+                        background: #fffaf1f2;
+                        /* color: black;
+                          }
+
+                          .notification-delete:hover {
+                            background-color: #fee2e2;
+                            color: #dc2626;
+                            transform: scale(1.1);
+                          }
+
+                          .notification-item.fade-out {
+                            opacity: 0;
+                            transform: translateX(-20px) scale(0.95);
+                            transition: all 0.3s ease-out;
+                          }
+
+                          .notification-empty {
+                            text-align: center;
+                            color: #6b7280;
+                            font-style: italic;
+                            padding: 20px;
+                          }
+
+                          @media (min-width: 768px) {
+                            .settings-menu {
+                              right: 100px;
+                            }
+                            .profile-menu {
+                              right: 20px;
+                            }
+                            .notification-menu {
+                              right: 180px;
+                            }
+                          }
+    </style>
+  </head>
+
+  <body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+      <img
+        src="images/logo-one.png"
+        alt="شعار معمار دجلة"
+        class="logo-login"
+        style="display: block; margin: 0 auto 10px"
+      />
+      <div class="modal-content">
+        <h2>Admin Dashboard</h2>
+        <form id="loginForm">
+          <div class="form-group">
+            <label for="password">كلمة المرور:</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+          <button type="submit" class="btn-primary">Login</button>
+        </form>
+        <div id="loginError" class="error-message"></div>
+      </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div id="resetModal" class="modal">
+      <div class="modal-content">
+        <h2>إعادة تعيين كلمة المرور</h2>
+        <form id="resetForm">
+          <div class="form-group">
+            <label for="newPassword">كلمة المرور الجديدة:</label>
+            <input
+              type="password"
+              id="newPassword"
+              name="newPassword"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="confirmPassword">تأكيد كلمة المرور:</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              required
+            />
+          </div>
+          <button type="submit" class="btn-primary">إعادة تعيين</button>
+        </form>
+        <div id="resetError" class="error-message"></div>
+      </div>
+    </div>
+
+    <!-- Hero Header Section with Background Image -->
+    <!-- <div class="hero-section">
+      <img
+        src="./images/bg-two.webp"
+        alt=""
+        style="width: 100%; box-shadow: 0px 51px 80px -11px #e0130436"
+      />
+    </div> -->
+
+    <!-- Main Content Section -->
+    <style>
+      .intro-sub-admin {
+        position: absolute;
+        top: 50%;
+        right: 50%;
+        transform: translate(50%, -50%);
+        text-transform: uppercase;
+        font-size: 23px;
+        font-weight: 700;
+        color: #f5f5f5;
+        text-shadow:
+          1px -2px 1px #ffffff85,
+          1px 1px 1px #7f7c7c,
+          1px 1px 1px #393030,
+          1px 2px 1px #000000,
+          1px 1px 1px #919191,
+          1px 2px 1px #919191,
+          1px 1px 1px #817272,
+          1px 3px 1px #0e0e0e00,
+          1px 1px 1px #919191,
+          1px 1px 1px #919191,
+          1px 17px 6px rgb(16 16 16 / 0%),
+          1px 20px 10px rgb(16 16 16 / 38%),
+          1px 25px 35px rgb(0 0 0 / 0%),
+          1px 30px 60px rgb(0 0 0);
+      }
+    </style>
+    <div class="admin-main-content" id="adminContent" style="display: none">
+      <section class="card admin-card" aria-labelledby="adminTitle">
+        <div
+          class="intro"
+          style="
+            color: white;
+            position: relative;
+            height: 77px;
+            border-radius: 8px;
+            /* background: linear-gradient(353deg, rgb(131 0 0), rgb(18 16 16)); */
+            background-color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          "
+        >
+          <div class="text-top-container" style="flex-direction: row">
+            <div id="adminTitle" class="intro-title intro-title-admin">
+              Admin Dashboard
+            </div>
+            <div
+              class="intro-sub intro-sub-admin"
+              style="color: rgb(7, 7, 7) !important"
+            >
+              Admin Dashboard
+            </div>
+            <img
+              src="images/logo-two-cut.png"
+              alt=""
+              style="width: 150px; position: absolute; left: 20px"
+            />
+            <div
+              class="notification-icon"
+              style="
+                position: absolute;
+                right: 140px;
+                top: 56%;
+                transform: translateY(-50%);
+                filter: drop-shadow(12px 8px 20px rgba(17, 16, 12, 1.1));
+              "
+            >
+              <svg viewBox="0 0 24 24" style="width: 30px; height: 30px">
+                <defs>
+                  <linearGradient
+                    id="goldGradient"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop
+                      offset="0%"
+                      style="stop-color: #ffd700; stop-opacity: 1"
+                    />
+                    <stop
+                      offset="50%"
+                      style="stop-color: #ffa500; stop-opacity: 1"
+                    />
+                    <stop
+                      offset="100%"
+                      style="stop-color: #ff8c00; stop-opacity: 1"
+                    />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"
+                  fill="url(#goldGradient)"
+                />
+              </svg>
+              <span id="newEvaluationsBadge" class="badge">0</span>
+            </div>
+            <div
+              class="settings-icon"
+              style="
+                position: absolute;
+                right: 80px;
+                top: 50%;
+                transform: translateY(-50%);
+                filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.3))
+                  drop-shadow(-1px -1px 3px rgba(255, 255, 255, 0.3));
+                cursor: pointer;
+              "
+            >
+              <svg viewBox="0 0 24 24" style="width: 30px; height: 30px">
+                <defs>
+                  <linearGradient
+                    id="blackGradient"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop
+                      offset="0%"
+                      style="stop-color: #4a4a4a; stop-opacity: 1"
+                    />
+                    <stop
+                      offset="50%"
+                      style="stop-color: #2c2c2c; stop-opacity: 1"
+                    />
+                    <stop
+                      offset="100%"
+                      style="stop-color: #000000; stop-opacity: 1"
+                    />
+                  </linearGradient>
+                  <filter id="innerShadow2">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+                    <feOffset dx="1" dy="1" result="offsetblur" />
+                    <feFlood flood-color="#000000" flood-opacity="0.3" />
+                    <feComposite in2="offsetblur" operator="in" />
+                    <feMerge>
+                      <feMergeNode />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path
+                  d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"
+                  fill="url(#blackGradient)"
+                  stroke="#000000"
+                  stroke-width="0.5"
+                  filter="url(#innerShadow2)"
+                />
+              </svg>
+            </div>
+            <div class="settings-menu" id="settingsMenu">
+              <div class="menu-item user-role">
+                الدور: <span id="userRoleDisplay"></span>
+              </div>
+              <button class="menu-item rest-pass-btn" id="menuResetPasswordBtn">
+                إعادة تعيين كلمة مرور المدير
+              </button>
+              <button
+                class="menu-item push-notifications-btn"
+                id="pushNotificationsBtn"
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  justify-content: space-between;
+                "
+              >
+                <span>إشعارات الهاتف</span>
+                <span
+                  id="pushStatusIndicator"
+                  style="
+                    font-size: 12px;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    background: #666;
+                    color: white;
+                  "
+                  >غير مفعل</span
+                >
+              </button>
+            </div>
+            <div
+              class="profile-icon"
+              style="
+                position: absolute;
+                right: 20px;
+                top: 50%;
+                transform: translateY(-50%);
+                filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.3))
+                  drop-shadow(-1px -1px 3px rgba(255, 255, 255, 0.3));
+                cursor: pointer;
+              "
+            >
+              <svg
+                viewBox="0 0 24 24"
+                style="
+                  width: 40px;
+                  height: 39px;
+                  background: #53514f29;
+                  border-radius: 50%;
+                  padding: 4px;
+                  box-shadow: 0px 0px 4px 1px #001804d4;
+                "
+              >
+                <defs>
+                  <linearGradient
+                    id="blueGradient"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop
+                      offset="0%"
+                      style="stop-color: #6bb6ff; stop-opacity: 1"
+                    />
+                    <stop
+                      offset="50%"
+                      style="stop-color: #4a90e2; stop-opacity: 1"
+                    />
+                    <stop
+                      offset="100%"
+                      style="stop-color: #2c5aa0; stop-opacity: 1"
+                    />
+                  </linearGradient>
+                  <filter id="innerShadow">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+                    <feOffset dx="1" dy="1" result="offsetblur" />
+                    <feFlood flood-color="#000000" flood-opacity="0.3" />
+                    <feComposite in2="offsetblur" operator="in" />
+                    <feMerge>
+                      <feMergeNode />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                  fill="url(#blueGradient)"
+                  stroke="#2c5aa0"
+                  stroke-width="0.5"
+                  filter="url(#innerShadow)"
+                />
+              </svg>
+            </div>
+            <div class="profile-menu" id="profileMenu">
+              <button class="menu-item menu-item-edit" id="editProfileBtn">
+                <span>تعديل الملف الشخصي</span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  style="margin-right: 12px"
+                >
+                  <path
+                    d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                  />
+                </svg>
+              </button>
+              <button class="menu-item menu-item-out" id="signOutBtn">
+                <span>تسجيل الخروج</span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  style="margin-right: 12px"
+                >
+                  <path
+                    d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div class="notification-menu" id="notificationMenu">
+              <!-- Notifications will be populated here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div class="dashboard-content">
+          <!-- Summary Cards (Admin Only) -->
+          <div class="summary-cards" id="summaryCards" style="display: none">
+            <div class="summary-card">
+              <h3>إجمالي التقييمات</h3>
+              <div class="metric" id="totalEvaluations">0</div>
+            </div>
+            <div class="summary-card">
+              <h3>متوسط الرضا العام</h3>
+              <div class="metric" id="averageSatisfaction">0.0</div>
+            </div>
+            <div class="summary-card">
+              <h3>أعلى تقييم</h3>
+              <div class="metric" id="highestRating">0</div>
+            </div>
+            <div class="summary-card">
+              <h3>أدنى تقييم</h3>
+              <div class="metric" id="lowestRating">0</div>
+            </div>
+          </div>
+
+          <!-- Charts Section (Admin Only) -->
+          <div class="charts-section" id="chartsSection" style="display: none">
+            <div class="chart-container">
+              <h3>توزيع التقييمات لكل سؤال</h3>
+              <canvas
+                id="questionsChart"
+                style="max-height: 250px; width: 100%"
+              ></canvas>
+            </div>
+            <div class="chart-container">
+              <h3>متوسط الرضا العام</h3>
+              <canvas
+                id="overallChart"
+                style="max-height: 250px; width: 100%"
+              ></canvas>
+            </div>
+          </div>
+
+          <!-- Data Table -->
+          <div class="table-section">
+            <div class="top-of-table">
+              <div
+                class="filter-container"
+                id="filterContainer"
+                style="
+                  display: flex !important;
+                  justify-content: center;
+                  align-items: center;
+                  gap: 20px;
+                "
+              >
+                <div>
+                  <input
+                    type="text"
+                    id="searchInput"
+                    class="search-names"
+                    placeholder="ابحث هنا..."
+                  />
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                  "
+                >
+                  <!-- <label for="satisfactionFilter">فلتر حسب الرضا العام:</label> -->
+                  <select id="satisfactionFilter">
+                    <option value="all">الكل</option>
+                    <option value="5">راضٍ جداً</option>
+                    <option value="4">راضٍ</option>
+                    <option value="3">محايد</option>
+                    <option value="2">غير راضٍ</option>
+                    <option value="1">غير راضٍ جداً</option>
+                  </select>
+                </div>
+              </div>
+              <div
+                class="button-container"
+                style="
+                  display: flex;
+                  justify-content: center;
+                  gap: 10px;
+                  margin: 10px 0;
+                "
+              >
+                <button
+                  id="downloadBtn"
+                  class="btn-secondary"
+                  style="
+                    border: 1px solid #808080a6;
+                    justify-content: center;
+                    display: flex;
+                    align-items: center;
+                  "
+                >
+                  <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                  </svg>
+                  تحميل البيانات
+                </button>
+                <button
+                  id="printBtn"
+                  class="btn-secondary"
+                  style="
+                    border: 1px solid #808080a6;
+                    justify-content: center;
+                    display: flex;
+                    align-items: center;
+                  "
+                >
+                  <svg class="icon" viewBox="0 0 24 24">
+                    <path
+                      d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zM16 19H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"
+                    />
+                  </svg>
+                  طباعة
+                </button>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table id="evaluationsTable">
+                <thead>
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الاسم</th>
+                    <th>الهاتف</th>
+                    <th>السؤال 1</th>
+                    <th>السؤال 2</th>
+                    <th>السؤال 3</th>
+                    <th>السؤال 4</th>
+                    <th>التعليقات</th>
+                    <th id="deleteHeader" style="display: none">حذف</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody">
+                  <!-- Data will be populated here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Buttons -->
+        <div class="reset-password-section">
+          <button id="logoutBtn" class="btn-secondary">تسجيل الخروج</button>
+          <button
+            id="resetAdminPasswordBtn"
+            class="btn-secondary"
+            style="display: none"
+          >
+            إعادة تعيين كلمة مرور المدير
+          </button>
+          <button
+            id="resetEmployeePasswordBtn"
+            class="btn-secondary"
+            style="display: none"
+          >
+            إعادة تعيين كلمة مرور الموظف
+          </button>
+        </div>
+
+        <!-- Modern Footer -->
+        <footer class="modern-footer admin-footer" aria-label="معلومات الاتصال">
+          <div class="footer-content">
+            <div class="footer-info">
+              <a
+                href="tel:15409"
+                class="contact-item"
+                style="text-decoration: none; color: inherit"
+              >
+                <div class="contact-icon">📞</div>
+                <div class="contact-text">
+                  <span class="contact-label">الخط الساخن</span>
+                  <span class="contact-value">15409</span>
+                </div>
+              </a>
+
+              <div class="contact-item">
+                <div class="contact-icon">🌐</div>
+                <div class="contact-text">
+                  <span class="contact-label">الموقع</span>
+                  <a
+                    href="https://www.memaardegla.com"
+                    target="_blank"
+                    rel="noopener"
+                    class="contact-link"
+                    >www.memaardegla.com</a
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="footer-logo">
+              <img
+                class="logo-sm"
+                src="images/logo-two-cut.png"
+                alt="شعار مصغر معمار دجلة"
+              />
+            </div>
+          </div>
+        </footer>
+      </section>
+    </div>
+    <script>
+      console.log("Admin Dashboard Loaded");
+    </script>
+    <script src="push-service.js"></script>
+    <script src="admin.js"></script>
+  </body>
+</html>

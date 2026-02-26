@@ -1,0 +1,1296 @@
+// Admin Dashboard JavaScript
+document.addEventListener("DOMContentLoaded", function () {
+  // Authentication elements
+  const loginModal = document.getElementById("loginModal");
+  const resetModal = document.getElementById("resetModal");
+  const adminContent = document.getElementById("adminContent");
+  const loginForm = document.getElementById("loginForm");
+  const resetForm = document.getElementById("resetForm");
+  const resetAdminPasswordBtn = document.getElementById(
+    "resetAdminPasswordBtn",
+  );
+  const resetEmployeePasswordBtn = document.getElementById(
+    "resetEmployeePasswordBtn",
+  );
+  const logoutBtn = document.getElementById("logoutBtn");
+  const loginError = document.getElementById("loginError");
+  const resetError = document.getElementById("resetError");
+  let userRole = null;
+
+  // Settings menu elements
+  const settingsIcon = document.querySelector(".settings-icon");
+  const settingsMenu = document.getElementById("settingsMenu");
+  const userRoleDisplay = document.getElementById("userRoleDisplay");
+  const menuResetPasswordBtn = document.getElementById("menuResetPasswordBtn");
+
+  // Profile menu elements
+  const profileIcon = document.querySelector(".profile-icon");
+  const profileMenu = document.getElementById("profileMenu");
+  const editProfileBtn = document.getElementById("editProfileBtn");
+  const signOutBtn = document.getElementById("signOutBtn");
+
+  // Notification menu elements
+  const notificationIcon = document.querySelector(".notification-icon");
+  let clearNotificationsBtn = null;
+
+  // Notification system state
+  let unreadEvaluationIds = new Set();
+  let badgeUpdateTimer = null;
+  let audioContextEnabled = false;
+  let cachedAudio = null;
+  let globalAudioContext = null;
+
+  // Settings menu functionality
+  settingsIcon.addEventListener("click", () => {
+    settingsMenu.style.display =
+      settingsMenu.style.display === "block" ? "none" : "block";
+  });
+
+  menuResetPasswordBtn.addEventListener("click", () => {
+    resetModal.style.display = "block";
+    resetModal.dataset.type = "admin";
+    settingsMenu.style.display = "none";
+  });
+
+  // Profile menu functionality
+  profileIcon.addEventListener("click", () => {
+    profileMenu.style.display =
+      profileMenu.style.display === "block" ? "none" : "block";
+  });
+
+  signOutBtn.addEventListener("click", async () => {
+    try {
+      // Close EventSource connection before logout
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+
+      const response = await fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        showLoginModal();
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+    profileMenu.style.display = "none";
+  });
+
+  editProfileBtn.addEventListener("click", () => {
+    alert("تعديل الملف الشخصي - ميزة قادمة قريباً");
+    profileMenu.style.display = "none";
+  });
+
+  // Close menu on outside click
+  document.addEventListener("click", (e) => {
+    if (
+      !settingsIcon.contains(e.target) &&
+      !settingsMenu.contains(e.target) &&
+      !profileIcon.contains(e.target) &&
+      !profileMenu.contains(e.target) &&
+      !notificationIcon.contains(e.target) &&
+      (!clearNotificationsBtn || !clearNotificationsBtn.contains(e.target))
+    ) {
+      settingsMenu.style.display = "none";
+      profileMenu.style.display = "none";
+      // Hide clear notifications button
+      if (clearNotificationsBtn) {
+        clearNotificationsBtn.style.display = "none";
+      }
+    }
+  });
+
+  // Close reset modal on outside click
+  resetModal.addEventListener("click", (e) => {
+    if (e.target === resetModal) {
+      resetModal.style.display = "none";
+    }
+  });
+
+  // Check authentication on load
+  checkAuth();
+
+  async function checkAuth() {
+    try {
+      const response = await fetch("/api/admin/check", {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.authenticated) {
+        userRole = data.role;
+        if (userRole === "employee") {
+          window.location.href = "employee.html";
+        } else {
+          showAdminContent();
+        }
+      } else {
+        showLoginModal();
+      }
+    } catch (error) {
+      console.error("Error checking auth:", error);
+      showLoginModal();
+    }
+  }
+
+  function showLoginModal() {
+    loginModal.style.display = "block";
+    adminContent.style.display = "none";
+  }
+
+  function showAdminContent() {
+    loginModal.style.display = "none";
+    resetModal.style.display = "none";
+    adminContent.style.display = "block";
+
+    // Show/hide elements based on role
+    if (userRole === "admin") {
+      document.getElementById("summaryCards").style.display = "grid";
+      document.getElementById("chartsSection").style.display = "grid";
+      document.getElementById("filterContainer").style.display = "flex";
+      document.getElementById("deleteHeader").style.display = "table-cell";
+      document.getElementById("resetAdminPasswordBtn").style.display =
+        "inline-block";
+      document.getElementById("resetEmployeePasswordBtn").style.display =
+        "inline-block";
+    } else if (userRole === "employee") {
+      document.getElementById("summaryCards").style.display = "none";
+      document.getElementById("chartsSection").style.display = "none";
+      document.getElementById("filterContainer").style.display = "none";
+      document.getElementById("deleteHeader").style.display = "none";
+      document.getElementById("resetAdminPasswordBtn").style.display = "none";
+      document.getElementById("resetEmployeePasswordBtn").style.display =
+        "none";
+    }
+
+    userRoleDisplay.textContent = userRole;
+
+    // Initialize lastViewedEvaluations if not set (first login of this session)
+    if (!sessionStorage.getItem("lastViewedEvaluations")) {
+      // Set to 5 minutes ago so very recent evaluations show as new
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      sessionStorage.setItem(
+        "lastViewedEvaluations",
+        fiveMinutesAgo.toISOString(),
+      );
+    }
+
+    fetchEvaluations();
+
+    // Set up real-time notifications after login
+    setupEventSource();
+  }
+
+  // Login form handler
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(loginForm);
+    const password = formData.get("password");
+
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        userRole = data.role;
+        if (userRole === "employee") {
+          window.location.href = "employee.html";
+        } else {
+          showAdminContent();
+        }
+      } else {
+        loginError.textContent = "كلمة المرور غير صحيحة";
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      loginError.textContent = "حدث خطأ في تسجيل الدخول";
+    }
+  });
+
+  // Logout button handler
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      // Close EventSource connection before logout
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+
+      const response = await fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.success) {
+        showLoginModal();
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  });
+
+  // Reset admin password button handler
+  resetAdminPasswordBtn.addEventListener("click", () => {
+    resetModal.style.display = "block";
+    resetModal.dataset.type = "admin";
+  });
+
+  // Reset employee password button handler
+  resetEmployeePasswordBtn.addEventListener("click", () => {
+    resetModal.style.display = "block";
+    resetModal.dataset.type = "employee";
+  });
+
+  // Reset form handler
+  resetForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const newPassword = document.getElementById("newPassword").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
+    const resetType = resetModal.dataset.type;
+
+    if (newPassword !== confirmPassword) {
+      resetError.textContent = "كلمات المرور غير متطابقة";
+      return;
+    }
+
+    const endpoint =
+      resetType === "employee"
+        ? "/api/admin/reset-employee-password"
+        : "/api/admin/reset-admin-password";
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        resetModal.style.display = "none";
+        alert(
+          `تم إعادة تعيين كلمة مرور ${
+            resetType === "employee" ? "الموظف" : "المدير"
+          } بنجاح`,
+        );
+      } else {
+        resetError.textContent = "حدث خطأ في إعادة تعيين كلمة المرور";
+      }
+    } catch (error) {
+      console.error("Reset password error:", error);
+      resetError.textContent = "حدث خطأ في إعادة تعيين كلمة المرور";
+    }
+  });
+
+  // Fetch data from backend
+  let evaluations = [];
+  let filteredEvaluations = [];
+
+  // Function to fetch evaluations from server
+  async function fetchEvaluations() {
+    try {
+      const response = await fetch("/api/evaluations", {
+        credentials: "include",
+      });
+      evaluations = await response.json();
+
+      // Sort evaluations by date descending (newest first)
+      evaluations.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      filteredEvaluations = [...evaluations];
+
+      // Initialize notification system on first load
+      if (!sessionStorage.getItem("notificationSystemInitialized")) {
+        // Clear any old timestamp-based data
+        sessionStorage.removeItem("lastViewedEvaluations");
+        sessionStorage.setItem("notificationSystemInitialized", "true");
+        console.log("Notification system initialized with ID-based tracking");
+      }
+
+      updateNewEvaluationsBadge();
+      applyFilters(); // Reapply current filters instead of updateDashboard with full list
+    } catch (error) {
+      console.error("Error fetching evaluations:", error);
+    }
+  }
+
+  // Enhanced audio context management
+  function initializeAudioContext() {
+    if (!globalAudioContext) {
+      try {
+        globalAudioContext = new (
+          window.AudioContext || window.webkitAudioContext
+        )();
+        console.log(
+          "AudioContext initialized, state:",
+          globalAudioContext.state,
+        );
+      } catch (error) {
+        console.log("AudioContext not supported");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function enableAudioOnUserInteraction() {
+    if (!audioContextEnabled && initializeAudioContext()) {
+      if (globalAudioContext.state === "suspended") {
+        globalAudioContext
+          .resume()
+          .then(() => {
+            console.log("AudioContext resumed after user interaction");
+            audioContextEnabled = true;
+            // Pre-cache audio for better performance
+            preloadAudio();
+          })
+          .catch((e) => {
+            console.log("Failed to resume AudioContext:", e);
+          });
+      } else {
+        audioContextEnabled = true;
+        preloadAudio();
+      }
+    }
+  }
+
+  // Preload and cache audio for better performance
+  function preloadAudio() {
+    if (!cachedAudio) {
+      try {
+        cachedAudio = new Audio("/notification sound/sound.wav");
+        cachedAudio.volume = 0.8;
+        cachedAudio.preload = "auto";
+        cachedAudio.load();
+        console.log("Audio preloaded successfully");
+      } catch (error) {
+        console.log("Failed to preload audio:", error);
+      }
+    }
+  }
+
+  // Add multiple event listeners for user interaction
+  ["click", "keydown", "touchstart", "touchend", "mousedown", "scroll"].forEach(
+    (eventType) => {
+      document.addEventListener(eventType, enableAudioOnUserInteraction, {
+        once: true,
+        passive: true,
+      });
+    },
+  );
+
+  // Also try to enable on page visibility change
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      enableAudioOnUserInteraction();
+    }
+  });
+
+  // Initialize audio context immediately if possible
+  initializeAudioContext();
+
+  // Highly reliable notification sound for each new evaluation
+  function playNotificationSoundReliably() {
+    // Always show visual feedback first
+    showVisualNotificationFallback();
+
+    // Skip audio if page is hidden
+    if (document.hidden) {
+      console.log("Page hidden, skipping audio");
+      return;
+    }
+
+    // Force enable audio context if not ready
+    if (!audioContextEnabled && globalAudioContext?.state === "suspended") {
+      globalAudioContext
+        .resume()
+        .then(() => {
+          audioContextEnabled = true;
+          console.log("Audio context resumed for notification");
+          playAudioNow();
+        })
+        .catch((e) => {
+          console.log("Failed to resume audio context:", e);
+          playFallbackBeep();
+        });
+    } else {
+      playAudioNow();
+    }
+  }
+
+  function playAudioNow() {
+    try {
+      // Create fresh audio element each time for maximum reliability
+      const audio = new Audio();
+      audio.src = "/notification sound/sound.wav";
+      audio.volume = 0.8;
+      audio.preload = "auto";
+
+      // Set up event handlers
+      audio.addEventListener("canplaythrough", () => {
+        // Play as soon as ready
+        audio
+          .play()
+          .then(() => {
+            console.log("Notification sound played successfully");
+          })
+          .catch((error) => {
+            console.log("Audio play failed:", error.name);
+            playFallbackBeep();
+          });
+      });
+
+      audio.addEventListener("error", (e) => {
+        console.log("Audio load error, using fallback:", e);
+        playFallbackBeep();
+      });
+
+      // Load the audio
+      audio.load();
+
+      // Fallback timeout in case canplaythrough doesn't fire
+      setTimeout(() => {
+        if (audio.readyState < 3) {
+          // HAVE_FUTURE_DATA or higher
+          console.log("Audio loading timeout, using fallback");
+          playFallbackBeep();
+        }
+      }, 2000);
+    } catch (error) {
+      console.log("Audio creation failed:", error);
+      playFallbackBeep();
+    }
+  }
+
+  function playFallbackBeep() {
+    try {
+      if (globalAudioContext && globalAudioContext.state === "running") {
+        const oscillator = globalAudioContext.createOscillator();
+        const gainNode = globalAudioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(globalAudioContext.destination);
+
+        oscillator.frequency.setValueAtTime(
+          800,
+          globalAudioContext.currentTime,
+        );
+        oscillator.frequency.setValueAtTime(
+          600,
+          globalAudioContext.currentTime + 0.1,
+        );
+
+        gainNode.gain.setValueAtTime(0.2, globalAudioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          globalAudioContext.currentTime + 0.3,
+        );
+
+        oscillator.start(globalAudioContext.currentTime);
+        oscillator.stop(globalAudioContext.currentTime + 0.3);
+
+        console.log("Fallback beep played");
+      } else {
+        console.log("Audio context not available for beep");
+      }
+    } catch (error) {
+      console.log("Fallback beep failed:", error);
+    }
+  }
+
+  // Enhanced fallback sound with better performance
+  function playFallbackSound() {
+    try {
+      if (!globalAudioContext) {
+        initializeAudioContext();
+      }
+
+      if (globalAudioContext && globalAudioContext.state === "running") {
+        // Create optimized beep sound
+        const oscillator = globalAudioContext.createOscillator();
+        const gainNode = globalAudioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(globalAudioContext.destination);
+
+        // Dual-tone notification sound
+        oscillator.frequency.setValueAtTime(
+          800,
+          globalAudioContext.currentTime,
+        );
+        oscillator.frequency.setValueAtTime(
+          600,
+          globalAudioContext.currentTime + 0.1,
+        );
+
+        gainNode.gain.setValueAtTime(0.1, globalAudioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          globalAudioContext.currentTime + 0.25,
+        );
+
+        oscillator.start(globalAudioContext.currentTime);
+        oscillator.stop(globalAudioContext.currentTime + 0.25);
+
+        console.log("Fallback beep sound played");
+        return;
+      }
+    } catch (error) {
+      console.log("Fallback sound failed:", error);
+    }
+
+    // If all audio fails, ensure visual feedback
+    showVisualNotificationFallback();
+  }
+
+  // Enhanced visual notification fallback
+  function showVisualNotificationFallback() {
+    const badge = document.getElementById("newEvaluationsBadge");
+
+    // Animate the badge only
+    if (badge) {
+      badge.style.animation = "pulse 0.8s ease-in-out 2";
+      badge.style.backgroundColor = "#ff4444";
+      setTimeout(() => {
+        badge.style.animation = "";
+        badge.style.backgroundColor = "";
+      }, 1600);
+    }
+
+    // Show browser notification if permission granted
+    if (Notification.permission === "granted") {
+      new Notification("تقييم جديد", {
+        body: "تم استلام تقييم جديد",
+        icon: "/favicon.ico",
+        tag: "new-evaluation",
+      });
+    } else if (Notification.permission !== "denied") {
+      // Request permission for future notifications
+      Notification.requestPermission();
+    }
+  }
+
+  // Optimized notification handler for new evaluations
+  function showNewEvaluationNotification() {
+    console.log("New evaluation notification triggered");
+
+    // Update badge count with debouncing
+    debouncedUpdateBadge();
+
+    // Always try to play sound - simplified and reliable
+    playNotificationSoundReliably();
+
+    // Browser notification
+    if (Notification.permission === "granted") {
+      try {
+        new Notification("تقييم جديد", {
+          body: "تم استلام تقييم جديد جديد",
+          icon: "/favicon.ico",
+          tag: "new-evaluation",
+          requireInteraction: false,
+          silent: false,
+        });
+      } catch (e) {
+        console.log("Browser notification failed:", e);
+      }
+    } else if (
+      Notification.permission === "default" &&
+      !sessionStorage.getItem("notificationPermissionRequested")
+    ) {
+      sessionStorage.setItem("notificationPermissionRequested", "true");
+      Notification.requestPermission();
+    }
+  }
+
+  // Enhanced audio context management
+  function initializeAudioContext() {
+    if (!globalAudioContext) {
+      try {
+        globalAudioContext = new (
+          window.AudioContext || window.webkitAudioContext
+        )();
+        console.log(
+          "AudioContext initialized, state:",
+          globalAudioContext.state,
+        );
+      } catch (error) {
+        console.log("AudioContext not supported");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function enableAudioOnUserInteraction() {
+    if (!audioContextEnabled && initializeAudioContext()) {
+      if (globalAudioContext.state === "suspended") {
+        globalAudioContext
+          .resume()
+          .then(() => {
+            console.log("AudioContext resumed after user interaction");
+            audioContextEnabled = true;
+            // Pre-cache audio for better performance
+            preloadAudio();
+          })
+          .catch((e) => {
+            console.log("Failed to resume AudioContext:", e);
+          });
+      } else {
+        audioContextEnabled = true;
+        preloadAudio();
+      }
+    }
+  }
+
+  // Preload and cache audio for better performance
+  function preloadAudio() {
+    if (!cachedAudio) {
+      try {
+        cachedAudio = new Audio("/notification sound/sound.wav");
+        cachedAudio.volume = 0.8;
+        cachedAudio.preload = "auto";
+        cachedAudio.load();
+        console.log("Audio preloaded successfully");
+      } catch (error) {
+        console.log("Failed to preload audio:", error);
+      }
+    }
+  }
+
+  // Add multiple event listeners for user interaction
+  ["click", "keydown", "touchstart", "touchend", "mousedown", "scroll"].forEach(
+    (eventType) => {
+      document.addEventListener(eventType, enableAudioOnUserInteraction, {
+        once: true,
+        passive: true,
+      });
+    },
+  );
+
+  // Also try to enable on page visibility change
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      enableAudioOnUserInteraction();
+    }
+  });
+
+  // Initialize audio context immediately if possible
+  initializeAudioContext();
+
+  // Set up Server-Sent Events for real-time notifications
+  let eventSource = null;
+
+  function setupEventSource() {
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    // EventSource with credentials for authentication
+    eventSource = new EventSource("/api/notifications", {
+      withCredentials: true,
+    });
+
+    eventSource.onmessage = function (event) {
+      const data = JSON.parse(event.data);
+      if (data.type === "new_evaluation") {
+        console.log("New evaluation received - ID:", data.data._id);
+
+        // Add to unread notifications immediately
+        unreadEvaluationIds.add(data.data._id);
+        sessionStorage.setItem(
+          "unreadEvaluationIds",
+          JSON.stringify([...unreadEvaluationIds]),
+        );
+
+        // Trigger notifications
+        showNewEvaluationNotification();
+
+        // Fetch evaluations to update the table and get full data
+        fetchEvaluations();
+      }
+    };
+
+    eventSource.onerror = function (error) {
+      console.error("EventSource error:", error);
+      eventSource.close();
+      // Attempt to reconnect after a delay if authenticated
+      if (userRole) {
+        setTimeout(setupEventSource, 5000);
+      }
+    };
+
+    console.log("EventSource connected for notifications");
+  }
+
+  // Don't call setupEventSource() here - it should be called after login
+
+  // Function to populate table
+  function populateTable(evaluations) {
+    const tableBody = document.getElementById("tableBody");
+    tableBody.innerHTML = "";
+    evaluations.forEach((evaluation) => {
+      const row = document.createElement("tr");
+      const date = new Date(evaluation.date).toLocaleDateString("ar-EG");
+      const deleteCell =
+        userRole === "admin"
+          ? `<td><button class="delete-btn" data-id="${evaluation._id}" title="حذف">🗑️</button></td>`
+          : "";
+      row.setAttribute("data-date", evaluation.date);
+      row.innerHTML = `
+        <td>${date}</td>
+        <td>${evaluation.name || "-"}</td>
+        <td>${evaluation.phone || "-"}</td>
+        <td class="eval-${evaluation.q1}">${evaluation.q1}</td>
+        <td class="eval-${evaluation.q2}">${evaluation.q2}</td>
+        <td class="eval-${evaluation.q3}">${evaluation.q3}</td>
+        <td class="eval-${evaluation.q4}">${evaluation.q4}</td>
+        <td>${evaluation.comments || "-"}</td>
+        ${deleteCell}
+      `;
+      tableBody.appendChild(row);
+    });
+  }
+
+  // Function to calculate summary metrics
+  function calculateMetrics(evaluations) {
+    const totalEvaluations = evaluations.length;
+    const averageSatisfaction =
+      totalEvaluations > 0
+        ? (
+            evaluations.reduce((sum, evaluation) => sum + evaluation.q4, 0) /
+            totalEvaluations
+          ).toFixed(1)
+        : "0.0";
+    const highestRating =
+      totalEvaluations > 0
+        ? Math.max(...evaluations.map((evaluation) => evaluation.q4))
+        : 0;
+    const lowestRating =
+      totalEvaluations > 0
+        ? Math.min(...evaluations.map((evaluation) => evaluation.q4))
+        : 0;
+
+    document.getElementById("totalEvaluations").textContent = totalEvaluations;
+    document.getElementById("averageSatisfaction").textContent =
+      averageSatisfaction;
+    document.getElementById("highestRating").textContent = highestRating;
+    document.getElementById("lowestRating").textContent = lowestRating;
+  }
+
+  // Prepare data for charts
+  const questionLabels = [
+    "السؤال 1:   ",
+    "السؤال 2:  ",
+    "السؤال 3:  ",
+    "السؤال 4:  ",
+  ];
+
+  let questionsChart, overallChart;
+
+  // Function to create/update questions chart
+  function createQuestionsChart(evaluations) {
+    const questionData = [1, 2, 3, 4].map((qNum) => {
+      const counts = [1, 2, 3, 4, 5].map(
+        (rating) =>
+          evaluations.filter((evaluation) => evaluation[`q${qNum}`] === rating)
+            .length,
+      );
+      return counts;
+    });
+    const ctxQuestions = document
+      .getElementById("questionsChart")
+      .getContext("2d");
+
+    if (questionsChart) {
+      questionsChart.destroy();
+    }
+    // test
+
+    questionsChart = new Chart(ctxQuestions, {
+      type: "bar",
+      data: {
+        labels: ["1", "2", "3", "4", "5"],
+        datasets: questionLabels.map((label, index) => ({
+          label: label,
+          data: questionData[index],
+          backgroundColor: [
+            "rgba(237, 171, 77, 0.8)",
+            "rgba(177, 15, 15, 0.8)",
+            "rgba(54, 162, 235, 0.8)",
+            "rgba(75, 192, 192, 0.8)",
+          ][index % 4],
+          borderColor: [
+            "rgba(237, 171, 77, 1)",
+            "rgba(177, 15, 15, 1)",
+            "rgba(54, 162, 235, 1)",
+            "rgba(75, 192, 192, 1)",
+          ][index % 4],
+          borderWidth: 2,
+          borderRadius: 4,
+          borderSkipped: false,
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: {
+              color: "rgba(255, 255, 255, 0.1)",
+            },
+            ticks: {
+              color: "#070707ff",
+              font: {
+                size: 10,
+              },
+            },
+          },
+          x: {
+            grid: {
+              color: "rgba(255, 255, 255, 0.1)",
+            },
+            ticks: {
+              color: "#000000ff",
+              font: {
+                size: 10,
+              },
+            },
+          },
+        },
+        plugins: {
+          legend: {
+            position: "top",
+            labels: {
+              color: "#000000ff",
+              font: {
+                size: 12,
+              },
+              boxWidth: 10,
+              padding: 5,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Function to create/update overall satisfaction chart
+  function createOverallChart(evaluations) {
+    const ctxOverall = document.getElementById("overallChart").getContext("2d");
+    const overallCounts = [1, 2, 3, 4, 5].map(
+      (rating) =>
+        evaluations.filter((evaluation) => evaluation.q4 === rating).length,
+    );
+
+    if (overallChart) {
+      overallChart.destroy();
+    }
+
+    overallChart = new Chart(ctxOverall, {
+      type: "doughnut",
+      data: {
+        labels: [
+          "1 - غير راضٍ جداً",
+          "2 - غير راضٍ",
+          "3 - محايد",
+          "4 - راضٍ",
+          "5 - راضٍ جداً",
+        ],
+        datasets: [
+          {
+            data: overallCounts,
+            backgroundColor: [
+              "rgba(177, 15, 15, 0.9)",
+              "rgba(237, 171, 77, 0.9)",
+              "rgba(255, 205, 86, 0.9)",
+              "rgba(75, 192, 192, 0.9)",
+              "rgba(54, 162, 235, 0.9)",
+            ],
+            borderColor: [
+              "rgba(177, 15, 15, 1)",
+              "rgba(237, 171, 77, 1)",
+              "rgba(255, 205, 86, 1)",
+              "rgba(75, 192, 192, 1)",
+              "rgba(54, 162, 235, 1)",
+            ],
+            borderWidth: 2,
+            hoverBorderWidth: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              color: "#000000ff",
+              font: {
+                size: 15,
+              },
+              padding: 5,
+              boxWidth: 12,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Function to update dashboard
+  function updateDashboard(evaluations) {
+    populateTable(evaluations);
+    if (userRole === "admin") {
+      calculateMetrics(evaluations);
+      createQuestionsChart(evaluations);
+      createOverallChart(evaluations);
+    }
+    highlightNewEvaluations();
+  }
+
+  // Notification bell click handler - show/hide clear button
+  notificationIcon.addEventListener("click", () => {
+    // Create clear button if it doesn't exist
+    if (!clearNotificationsBtn) {
+      clearNotificationsBtn = document.createElement("button");
+      clearNotificationsBtn.textContent = "مسح الإشعارات";
+      clearNotificationsBtn.className = "clear-notifications-btn";
+      clearNotificationsBtn.style.cssText = `
+        position: absolute;
+        right: 117px;
+        top: 11%;
+        transform: translateY(-50%);
+        background: linear-gradient(135deg, #b10f0f, #8c0c0c);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: 'Cairo', sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(177, 15, 15, 0.3);
+        transition: all 0.3s ease;
+        z-index: 1000;
+        display: none;
+      `;
+
+      // Add hover effects
+      clearNotificationsBtn.addEventListener("mouseenter", () => {
+        clearNotificationsBtn.style.background =
+          "linear-gradient(135deg, #8c0c0c, #6a0909)";
+        clearNotificationsBtn.style.transform = "translateY(-50%) scale(1.05)";
+      });
+
+      clearNotificationsBtn.addEventListener("mouseleave", () => {
+        clearNotificationsBtn.style.background =
+          "linear-gradient(135deg, #b10f0f, #8c0c0c)";
+        clearNotificationsBtn.style.transform = "translateY(-50%) scale(1)";
+      });
+
+      // Clear button functionality
+      clearNotificationsBtn.addEventListener("click", () => {
+        // Mark all unread evaluations as read (not just current filtered ones)
+        const unreadIds = [...unreadEvaluationIds];
+        if (unreadIds.length > 0) {
+          markEvaluationsAsRead(unreadIds);
+
+          // Clear the global unread set
+          unreadEvaluationIds.clear();
+
+          // Update sessionStorage
+          sessionStorage.setItem("unreadEvaluationIds", JSON.stringify([]));
+
+          // Update badge immediately to 0
+          const badge = document.getElementById("newEvaluationsBadge");
+          badge.style.display = "none";
+          badge.textContent = "0";
+
+          console.log("All notifications cleared");
+        }
+
+        // Hide the clear button
+        clearNotificationsBtn.style.display = "none";
+      });
+
+      // Add to DOM
+      document.body.appendChild(clearNotificationsBtn);
+    }
+
+    // Toggle clear button visibility
+    const isVisible = clearNotificationsBtn.style.display === "block";
+    clearNotificationsBtn.style.display = isVisible ? "none" : "block";
+
+    // Hide clear button after 5 seconds if not clicked
+    if (!isVisible) {
+      setTimeout(() => {
+        if (clearNotificationsBtn.style.display === "block") {
+          clearNotificationsBtn.style.display = "none";
+        }
+      }, 5000);
+    }
+  });
+
+  // Debounced badge update for better performance
+  function debouncedUpdateBadge() {
+    if (badgeUpdateTimer) {
+      clearTimeout(badgeUpdateTimer);
+    }
+    badgeUpdateTimer = setTimeout(() => {
+      updateNewEvaluationsBadge();
+    }, 100); // 100ms debounce
+  }
+
+  // Function to update new evaluations badge
+  function updateNewEvaluationsBadge() {
+    // Clean approach: track unread IDs instead of timestamps
+    const savedUnreadIds = sessionStorage.getItem("unreadEvaluationIds");
+    if (savedUnreadIds) {
+      try {
+        unreadEvaluationIds = new Set(JSON.parse(savedUnreadIds));
+      } catch (e) {
+        unreadEvaluationIds = new Set();
+      }
+    }
+
+    // Add any evaluations that aren't marked as read
+    evaluations.forEach((evaluation) => {
+      if (!isEvaluationMarkedAsRead(evaluation._id)) {
+        unreadEvaluationIds.add(evaluation._id);
+      }
+    });
+
+    // Remove IDs that no longer exist in evaluations
+    const currentEvalIds = new Set(evaluations.map((e) => e._id));
+    unreadEvaluationIds = new Set(
+      [...unreadEvaluationIds].filter((id) => currentEvalIds.has(id)),
+    );
+
+    // Save updated unread IDs
+    sessionStorage.setItem(
+      "unreadEvaluationIds",
+      JSON.stringify([...unreadEvaluationIds]),
+    );
+
+    const newCount = unreadEvaluationIds.size;
+
+    console.log("Badge Update:", {
+      totalEvaluations: evaluations.length,
+      newCount: newCount,
+      unreadIds: [...unreadEvaluationIds],
+      firstEvalDate: evaluations[0]
+        ? new Date(evaluations[0].date).toISOString()
+        : "none",
+    });
+
+    const badge = document.getElementById("newEvaluationsBadge");
+    if (newCount > 0) {
+      badge.textContent = newCount;
+      badge.style.display = "block";
+      // Add visual emphasis for new notifications
+      badge.style.animation = "pulse 0.8s ease-in-out 2";
+      setTimeout(() => {
+        badge.style.animation = "";
+      }, 1600);
+    } else {
+      badge.style.display = "none";
+    }
+  }
+
+  // Helper function to check if evaluation is marked as read
+  function isEvaluationMarkedAsRead(evaluationId) {
+    const readEvaluations = sessionStorage.getItem("readEvaluationIds");
+    if (!readEvaluations) return false;
+    try {
+      const readIds = JSON.parse(readEvaluations);
+      return readIds.includes(evaluationId);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Helper function to mark evaluations as read
+  function markEvaluationsAsRead(evaluationIds) {
+    const readEvaluations = sessionStorage.getItem("readEvaluationIds");
+    let readIds = [];
+    if (readEvaluations) {
+      try {
+        readIds = JSON.parse(readEvaluations);
+      } catch (e) {
+        readIds = [];
+      }
+    }
+
+    evaluationIds.forEach((id) => {
+      if (!readIds.includes(id)) {
+        readIds.push(id);
+      }
+    });
+
+    sessionStorage.setItem("readEvaluationIds", JSON.stringify(readIds));
+
+    // Remove from unread set
+    evaluationIds.forEach((id) => unreadEvaluationIds.delete(id));
+    sessionStorage.setItem(
+      "unreadEvaluationIds",
+      JSON.stringify([...unreadEvaluationIds]),
+    );
+  }
+
+  // Function to highlight new evaluations
+  function highlightNewEvaluations() {
+    const lastViewed = sessionStorage.getItem("lastViewedEvaluations");
+    const lastViewedDate = lastViewed
+      ? new Date(lastViewed)
+      : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = document.querySelectorAll("#tableBody tr");
+    rows.forEach((row) => {
+      const evalDate = new Date(row.getAttribute("data-date"));
+      if (evalDate > lastViewedDate) {
+        row.classList.add("highlight-new");
+      }
+    });
+  }
+
+  // Filter functionality (only for admin)
+  const filterSelect = document.getElementById("satisfactionFilter");
+  const searchInput = document.getElementById("searchInput");
+
+  function applyFilters() {
+    let filtered = [...evaluations];
+
+    // Apply search filter
+    const searchTerm = searchInput
+      ? searchInput.value.toLowerCase().trim()
+      : "";
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (evaluation) =>
+          (evaluation.name &&
+            evaluation.name.toLowerCase().includes(searchTerm)) ||
+          (evaluation.phone &&
+            evaluation.phone.toLowerCase().includes(searchTerm)),
+      );
+    }
+
+    // Apply satisfaction filter
+    const selectedValue = filterSelect ? filterSelect.value : "all";
+    if (selectedValue !== "all") {
+      filtered = filtered.filter(
+        (evaluation) => evaluation.q4 === parseInt(selectedValue),
+      );
+    }
+
+    filteredEvaluations = filtered;
+    updateDashboard(filteredEvaluations);
+  }
+
+  if (filterSelect) {
+    filterSelect.addEventListener("change", applyFilters);
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", applyFilters);
+  }
+
+  // Delete functionality (only for admin)
+  document.addEventListener("click", async (e) => {
+    if (e.target.classList.contains("delete-btn") && userRole === "admin") {
+      const id = e.target.getAttribute("data-id");
+      if (confirm("هل أنت متأكد من حذف هذا التقييم؟")) {
+        try {
+          const response = await fetch(`/api/evaluations/${id}`, {
+            method: "DELETE",
+            credentials: "include",
+          });
+          if (response.ok) {
+            await fetchEvaluations(); // Refresh the table
+          } else {
+            alert("حدث خطأ في حذف التقييم");
+          }
+        } catch (error) {
+          console.error("Delete error:", error);
+          alert("حدث خطأ في حذف التقييم");
+        }
+      }
+    }
+  });
+
+  // Print functionality
+  document.getElementById("printBtn").addEventListener("click", () => {
+    const printWindow = window.open("", "_blank");
+    const tableHTML = document.getElementById("evaluationsTable").outerHTML;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>تقييمات العملاء</title>
+          <style>
+            body { font-family: Arial, sans-serif; direction: rtl; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <h2>تقييمات العملاء</h2>
+          ${tableHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  });
+
+  // Download CSV functionality
+  document.getElementById("downloadBtn").addEventListener("click", () => {
+    const csvContent = generateCSV(filteredEvaluations);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "evaluations.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+
+  // Function to generate CSV content
+  function generateCSV(data) {
+    const headers = [
+      "التاريخ",
+      "الاسم",
+      "الهاتف",
+      "السؤال 1",
+      "السؤال 2",
+      "السؤال 3",
+      "السؤال 4",
+      "التعليقات",
+    ];
+    let csv = headers.join(",") + "\n";
+    data.forEach((evaluation) => {
+      const date = new Date(evaluation.date).toLocaleDateString("ar-EG");
+      const row = [
+        date,
+        evaluation.name || "-",
+        evaluation.phone || "-",
+        evaluation.q1,
+        evaluation.q2,
+        evaluation.q3,
+        evaluation.q4,
+        evaluation.comments || "-",
+      ];
+      csv += row.map((field) => `"${field}"`).join(",") + "\n";
+    });
+    return csv;
+  }
+});
