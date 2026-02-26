@@ -19,6 +19,9 @@ yarn-error.log*
 Thumbs.db
 desktop.ini
 
+# Large binary installers
+*.msi
+
 # IDE
 .vscode/
 .idea/
